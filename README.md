@@ -2,7 +2,7 @@
 
 An interactive machine-learning web application that predicts aqueous solubility ($\log S$) from molecular SMILES strings and evaluates environmental fate—specifically **groundwater leaching risk in sandy Florida aquifers**, **bioaccumulation potential**, and **polycyclic aromatic persistence**.
 
-🔗 **Live Web App:** [Launch Interactive Screener](https://streamlit.app)
+🔗 **Live Web App:** [Launch Interactive Screener]([https://streamlit.app](https://chem-solubility-predictor.streamlit.app/))
 
 ## 🔬 Scientific Methodology & Model Performance
 Trained on the **Delaney ESOL dataset (1,128 real chemical compounds)** using **RDKit** and **Scikit-Learn**:
