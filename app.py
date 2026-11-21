@@ -24,12 +24,16 @@ def name_to_smiles(query):
     return query
   try:
     encoded = urllib.parse.quote(query.strip())
-    p1 = "https://nih.gov"
-    p2 = f"/rest/pug/compound/name/{encoded}/property/CanonicalSMILES/TXT"
-    with urllib.request.urlopen(p1 + p2, timeout=5) as response:
-      return response.read().decode("utf-8").strip()
+    p1 = "https://pubchem" + ".ncbi.nlm.nih.gov"
+    p2 = f"/rest/pug/compound/name/{encoded}/property/IsomericSMILES/TXT"
+    req = urllib.request.Request(
+        p1 + p2, headers={"User-Agent": "Mozilla/5.0"}
+    )
+    with urllib.request.urlopen(req, timeout=8) as response:
+      return response.read().decode("utf-8").strip().splitlines()
   except Exception:
     return None
+
 
 
 def extract_upgraded_features(mol):
