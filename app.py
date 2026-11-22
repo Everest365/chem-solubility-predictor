@@ -1,9 +1,10 @@
+import json
 import urllib.parse
 import urllib.request
 import joblib
 import pandas as pd
 from rdkit import Chem
-from rdkit.Chem import Descriptors, Draw
+from rdkit.Chem import Descriptors, Draw, FilterCatalog
 import streamlit as st
 
 st.set_page_config(
@@ -14,8 +15,8 @@ st.set_page_config(
 st.title("🧪 AI Chemical Solubility & Florida Aquifer Risk Screener")
 st.write(
     "Predicts aqueous solubility (logS & mg/L) using a Random Forest model"
-    " (R² = 0.862, RMSE = 0.807) and screens for environmental leaching and"
-    " bioaccumulation risks."
+    " (R² = 0.862, RMSE = 0.807) and screens for environmental leaching,"
+    " bioaccumulation, and chemical toxicity risks."
 )
 
 model = joblib.load("solubility_model (2).pkl")
@@ -38,6 +39,49 @@ def name_to_smiles(query):
     return None
 
 
+def check_toxicity(smiles, mol):
+  """Checks PubChem GHS hazard classifications + RDKit toxicophore alerts."""
+  hazards = []
+
+  # 1. Live PubChem GHS Classification Lookup
+  try:
+    encoded = urllib.parse.quote(smiles)
+    url = (
+        "https://nih.gov"
+        f"{encoded}/classification/JSON"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=6) as response:
+      data = json.loads(response.read().decode("utf-8"))
+      raw_text = json.dumps(data)
+
+      if "Acute Toxicity" in raw_text or "Fatal" in raw_text:
+        hazards.append("Acute Toxicity")
+      if "Aquatic Acute" in raw_text or "Aquatic Chronic" in raw_text:
+        hazards.append("Aquatic / Environmental Hazard")
+      if (
+          "Carcinogenicity" in raw_text
+          or "Germ Cell Mutagenicity" in raw_text
+      ):
+        hazards.append("Carcinogen / Mutagen Risk")
+      if "Specific Target Organ Toxicity" in raw_text:
+        hazards.append("Organ Toxicity")
+  except Exception:
+    pass  # Fallback to structural rules if offline or timeout
+
+  # 2. Offline RDKit Structural Toxicophore Check (NIH filter catalog)
+  params = FilterCatalog.FilterCatalogParams()
+  params.AddCatalog(FilterCatalog.FilterCatalogParams.FilterCatalogs.NIH)
+  catalog = FilterCatalog.FilterCatalog(params)
+  if catalog.HasMatch(mol):
+    hazards.append("Reactive Toxicophore Structure")
+
+  unique_hazards = list(dict.fromkeys(hazards))
+  if unique_hazards:
+    return "High / Known Hazard", ", ".join(unique_hazards)
+  return "Low / No GHS Alerts", "No major toxicity flags found"
+
+
 def extract_upgraded_features(mol):
   return {
       "MolWt": Descriptors.MolWt(mol),
@@ -53,14 +97,22 @@ def extract_upgraded_features(mol):
   }
 
 
-def evaluate_risks(pred_logS, logP, arom_rings):
+def evaluate_risks(pred_logS, logP, arom_rings, tox_status):
   flags = []
+  is_toxic = tox_status == "High / Known Hazard"
+
   if pred_logS > -4.0 and logP < 2.5:
-    flags.append("High Groundwater Leaching Risk")
+    if is_toxic:
+      flags.append("HIGH CONTAMINATION RISK (Mobile + Toxic)")
+    else:
+      flags.append("High Mobility / Low Toxicity (Benign Tracer)")
+
   if logP >= 3.5 and pred_logS <= -3.5:
     flags.append("High Bioaccumulation Risk")
+
   if arom_rings >= 3:
     flags.append("Persistent Polycyclic Aromatic")
+
   return flags if flags else ["Moderate / Low Persistence"]
 
 
@@ -108,6 +160,7 @@ with tab1:
       arom_rings = feats["AromaticRings"].item()
       heavy_atoms = feats["HeavyAtoms"].item()
       sol_mg_L = (10**pred_logS) * mol_wt * 1000
+      tox_status, tox_details = check_toxicity(smiles_input, mol)
 
       if "." in smiles_input:
         st.info(
@@ -139,25 +192,43 @@ with tab1:
         st.metric("Molar Mass", f"{mol_wt:.2f} g/mol")
 
       st.subheader("Environmental & Florida Aquifer Fate")
+
+      # 1. Toxicity Classification Banner
+      if tox_status == "High / Known Hazard":
+        st.error(f"☠️ **TOXICITY ALERT ({tox_status}):** {tox_details}")
+      else:
+        st.info(f"🛡️ **TOXICITY SCREEN ({tox_status}):** {tox_details}")
+
+      # 2. Mobility & Persistence Banners
       risk_found = False
       if pred_logS > -4.0 and logP < 2.5:
-        st.warning(
-            "⚠️ **HIGH GROUNDWATER LEACHING RISK:** Mobile in sandy Florida"
-            " soils/aquifers."
-        )
+        if tox_status == "High / Known Hazard":
+          st.error(
+              "🚨 **CRITICAL AQUIFER CONTAMINATION RISK:** Toxic compound"
+              " that leaches rapidly through sandy Florida soils."
+          )
+        else:
+          st.warning(
+              "💧 **HIGH MOBILITY / LOW TOXICITY:** Leaches easily in sandy"
+              " soils, but poses low direct chemical toxicity (e.g., tracer or"
+              " natural organic)."
+          )
         risk_found = True
+
       if logP >= 3.5 and pred_logS <= -3.5:
         st.error(
             "🚨 **HIGH BIOACCUMULATION RISK:** Lipophilic; persists in aquatic"
             " food webs."
         )
         risk_found = True
+
       if arom_rings >= 3:
         st.warning(
             "⚠️ **PERSISTENT POLYCYCLIC AROMATIC:** Resists rapid microbial"
             " biodegradation."
         )
         risk_found = True
+
       if not risk_found:
         st.success("✅ **MODERATE / LOW ENVIRONMENTAL PERSISTENCE**")
 
@@ -168,7 +239,7 @@ with tab2:
   )
   batch_input = st.text_area(
       "Enter chemical names or SMILES separated by commas:",
-      value="Atrazine, Glyphosate, Caffeine, Ibuprofen, DDT",
+      value="Atrazine, Glyphosate, Caffeine, Ibuprofen, DDT, Citric acid",
   )
   if st.button("Run Batch Screening"):
     items = [item.strip() for item in batch_input.split(",") if item.strip()]
@@ -184,13 +255,16 @@ with tab2:
           mw = f["MolWt"].item()
           ar = f["AromaticRings"].item()
           mg_l = (10**p_logS) * mw * 1000
-          risks = ", ".join(evaluate_risks(p_logS, lp, ar))
+          t_status, t_details = check_toxicity(smi, m)
+          risks = ", ".join(evaluate_risks(p_logS, lp, ar, t_status))
           results.append({
               "Chemical": item,
               "Molar Mass (g/mol)": round(mw, 2),
               "LogP": round(lp, 2),
               "Predicted logS (mol/L)": round(p_logS, 2),
               "Solubility (mg/L)": round(mg_l, 1),
+              "Toxicity Status": t_status,
+              "Hazard Details": t_details,
               "Environmental Fate": risks,
           })
     if results:
@@ -213,32 +287,5 @@ with st.expander(
 ):
   st.markdown("""
     **Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):**
-    * **Upgraded 10-Feature Random Forest:** $R^2 = 0.862$ | $\\text{RMSE} = 0.807\\ \\log\\text{mol/L}$
-    * **Baseline 6-Feature Random Forest:** $R^2 = 0.853$ | $\\text{RMSE} = 0.832\\ \\log\\text{mol/L}$
-    """)
 
-  st.subheader("What Drives Water Solubility? (Feature Importance)")
-  feature_names = [
-      "MolWt",
-      "LogP",
-      "TPSA",
-      "HDonors",
-      "HAcceptors",
-      "RotBonds",
-      "AromaticRings",
-      "HeavyAtoms",
-      "FractionCSP3",
-      "ValenceElectrons",
-  ]
-  imp_df = pd.DataFrame(
-      {"Importance": model.feature_importances_}, index=feature_names
-  ).sort_values("Importance", ascending=False)
-  st.bar_chart(imp_df)
-
-  st.markdown("""
-    **Known Exceptions & Applicability Domain:**
-    * **Gases at Room Temperature (e.g., $\\text{CO}_2$, $\\text{NH}_3$, $\\text{CH}_4$):** Trained on condensed-phase (solid/liquid) organics, so aqueous solubility is overestimated for gas-phase molecules.
-    * **Ionic Salts & Metals (e.g., $\\text{NaCl}$, $\\text{CaCO}_3$):** Multi-ion lattices (SMILES containing `.`) dissolve via ion-dipole hydration rather than organic lipophilicity ($\\log P$).
-    * **Pure Water ($\\text{H}_2\\text{O}$):** Naturally mobile in aquifers as the solvent itself rather than a pollutant.
-    """)
 
