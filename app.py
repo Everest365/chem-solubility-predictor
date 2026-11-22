@@ -282,10 +282,6 @@ with tab2:
       )
 
 st.divider()
-with st.expander(
-    "📊 Model Accuracy, Feature Importance & Known Exceptions"
-):
+with st.expander("📊 Model Accuracy, Feature Importance & Known Exceptions"):
   st.markdown("""
-    **Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):**
-
-
+**Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):**
