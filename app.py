@@ -40,10 +40,8 @@ def name_to_smiles(query):
 
 
 def check_toxicity(smiles, mol):
-  """Checks PubChem GHS hazard classifications + RDKit toxicophore alerts."""
   hazards = []
 
-  # 1. Live PubChem GHS Classification Lookup
   try:
     encoded = urllib.parse.quote(smiles)
     url = (
@@ -67,9 +65,8 @@ def check_toxicity(smiles, mol):
       if "Specific Target Organ Toxicity" in raw_text:
         hazards.append("Organ Toxicity")
   except Exception:
-    pass  # Fallback to structural rules if offline or timeout
+    pass
 
-  # 2. Offline RDKit Structural Toxicophore Check (NIH filter catalog)
   params = FilterCatalog.FilterCatalogParams()
   params.AddCatalog(FilterCatalog.FilterCatalogParams.FilterCatalogs.NIH)
   catalog = FilterCatalog.FilterCatalog(params)
@@ -193,13 +190,11 @@ with tab1:
 
       st.subheader("Environmental & Florida Aquifer Fate")
 
-      # 1. Toxicity Classification Banner
       if tox_status == "High / Known Hazard":
         st.error(f"☠️ **TOXICITY ALERT ({tox_status}):** {tox_details}")
       else:
         st.info(f"🛡️ **TOXICITY SCREEN ({tox_status}):** {tox_details}")
 
-      # 2. Mobility & Persistence Banners
       risk_found = False
       if pred_logS > -4.0 and logP < 2.5:
         if tox_status == "High / Known Hazard":
@@ -283,5 +278,16 @@ with tab2:
 
 st.divider()
 with st.expander("📊 Model Accuracy, Feature Importance & Known Exceptions"):
-  st.markdown("""
-**Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):**
+  st.markdown("**Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):**")
+  st.markdown("* **Upgraded 10-Feature Random Forest:** R² = 0.862 | RMSE = 0.807 log mol/L")
+  st.markdown("* **Baseline 6-Feature Random Forest:** R² = 0.853 | RMSE = 0.832 log mol/L")
+
+  st.subheader("What Drives Water Solubility? (Feature Importance)")
+  feature_names = [
+      "MolWt",
+      "LogP",
+      "TPSA",
+      "HDonors",
+      "HAcceptors",
+      "RotBonds",
+      "AromaticRings",
