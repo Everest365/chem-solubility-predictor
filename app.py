@@ -41,7 +41,6 @@ def name_to_smiles(query):
 
 def check_toxicity(smiles, mol):
   hazards = []
-
   try:
     encoded = urllib.parse.quote(smiles)
     url = (
@@ -50,9 +49,7 @@ def check_toxicity(smiles, mol):
     )
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=6) as response:
-      data = json.loads(response.read().decode("utf-8"))
-      raw_text = json.dumps(data)
-
+      raw_text = json.dumps(json.loads(response.read().decode("utf-8")))
       if "Acute Toxicity" in raw_text or "Fatal" in raw_text:
         hazards.append("Acute Toxicity")
       if "Aquatic Acute" in raw_text or "Aquatic Chronic" in raw_text:
@@ -69,8 +66,7 @@ def check_toxicity(smiles, mol):
 
   params = FilterCatalog.FilterCatalogParams()
   params.AddCatalog(FilterCatalog.FilterCatalogParams.FilterCatalogs.NIH)
-  catalog = FilterCatalog.FilterCatalog(params)
-  if catalog.HasMatch(mol):
+  if FilterCatalog.FilterCatalog(params).HasMatch(mol):
     hazards.append("Reactive Toxicophore Structure")
 
   unique_hazards = list(dict.fromkeys(hazards))
@@ -97,19 +93,16 @@ def extract_upgraded_features(mol):
 def evaluate_risks(pred_logS, logP, arom_rings, tox_status):
   flags = []
   is_toxic = tox_status == "High / Known Hazard"
-
   if pred_logS > -4.0 and logP < 2.5:
-    if is_toxic:
-      flags.append("HIGH CONTAMINATION RISK (Mobile + Toxic)")
-    else:
-      flags.append("High Mobility / Low Toxicity (Benign Tracer)")
-
+    flags.append(
+        "HIGH CONTAMINATION RISK (Mobile + Toxic)"
+        if is_toxic
+        else "High Mobility / Low Toxicity (Benign Tracer)"
+    )
   if logP >= 3.5 and pred_logS <= -3.5:
     flags.append("High Bioaccumulation Risk")
-
   if arom_rings >= 3:
     flags.append("Persistent Polycyclic Aromatic")
-
   return flags if flags else ["Moderate / Low Persistence"]
 
 
@@ -189,7 +182,6 @@ with tab1:
         st.metric("Molar Mass", f"{mol_wt:.2f} g/mol")
 
       st.subheader("Environmental & Florida Aquifer Fate")
-
       if tox_status == "High / Known Hazard":
         st.error(f"☠️ **TOXICITY ALERT ({tox_status}):** {tox_details}")
       else:
@@ -278,10 +270,17 @@ with tab2:
 
 st.divider()
 with st.expander("📊 Model Accuracy, Feature Importance & Known Exceptions"):
-  st.markdown("**Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):**")
-  st.markdown("* **Upgraded 10-Feature Random Forest:** R² = 0.862 | RMSE = 0.807 log mol/L")
-  st.markdown("* **Baseline 6-Feature Random Forest:** R² = 0.853 | RMSE = 0.832 log mol/L")
-
+  st.markdown(
+      "**Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):**"
+  )
+  st.markdown(
+      "* **Upgraded 10-Feature Random Forest:** R² = 0.862 | RMSE = 0.807 log"
+      " mol/L"
+  )
+  st.markdown(
+      "* **Baseline 6-Feature Random Forest:** R² = 0.853 | RMSE = 0.832 log"
+      " mol/L"
+  )
   st.subheader("What Drives Water Solubility? (Feature Importance)")
   feature_names = [
       "MolWt",
@@ -291,3 +290,26 @@ with st.expander("📊 Model Accuracy, Feature Importance & Known Exceptions"):
       "HAcceptors",
       "RotBonds",
       "AromaticRings",
+      "HeavyAtoms",
+      "FractionCSP3",
+      "ValenceElectrons",
+]
+imp_df = pd.DataFrame(
+{"Importance": model.feature_importances_}, index=feature_names
+).sort_values("Importance", ascending=False)
+st.bar_chart(imp_df)
+st.markdown("Known Exceptions & Applicability Domain:")
+st.markdown(
+"* Gases at Room Temperature (e.g., CO₂, NH₃, CH₄): Trained on"
+" condensed-phase (solid/liquid) organics, so aqueous solubility is"
+" overestimated for gas-phase molecules."
+)
+st.markdown(
+"* Ionic Salts & Metals (e.g., NaCl, CaCO₃): Designed for neutral"
+" covalent organic molecules; ionic lattice dissociation is not modeled."
+)
+st.markdown(
+"* Toxicity Screening: Combines live PubChem GHS hazard"
+" classifications with offline RDKit structural toxicophore filters (NIH"
+" catalog)."
+)
