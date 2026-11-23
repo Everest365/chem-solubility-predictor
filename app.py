@@ -243,7 +243,7 @@ with tab1:
             else:
                 st.info(f"✅ **TOXICITY SCREEN ({tox_status}):** {tox_details}")
 
-                       fate_flags = evaluate_risks(
+            fate_flags = evaluate_risks(
                 pred_logS, logP, arom_rings, tox_status, tox_details, mol
             )
             for flag in fate_flags:
