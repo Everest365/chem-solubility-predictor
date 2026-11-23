@@ -274,29 +274,31 @@ with tab2:
 "Hazard Details": t_details,
 "Environmental Fate": risks,
 })
-if results:
-res_df = pd.DataFrame(results)
-st.dataframe(res_df, use_container_width=True)
-st.download_button(
-"📥 Download Comparison Table (CSV)",
-data=res_df.to_csv(index=False).encode("utf-8"),
-file_name="aquifer_solubility_screening.csv",
-mime="text/csv",
-)
-else:
-st.error(
-"No valid chemicals could be resolved. Check spelling and try again."
-)
+    if results:
+      res_df = pd.DataFrame(results)
+      st.dataframe(res_df, use_container_width=True)
+      st.download_button(
+          "📥 Download Comparison Table (CSV)",
+          data=res_df.to_csv(index=False).encode("utf-8"),
+          file_name="aquifer_solubility_screening.csv",
+          mime="text/csv",
+      )
+    else:
+      st.error(
+          "No valid chemicals could be resolved. Check spelling and try again."
+      )
+
 st.divider()
 exp = st.expander("📊 Model Accuracy, Feature Importance & Known Exceptions")
-exp.markdown("Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):")
-exp.markdown("* Upgraded 10-Feature Random Forest: R² = 0.862 | RMSE = 0.807 log mol/L")
-exp.markdown("* Baseline 6-Feature Random Forest: R² = 0.853 | RMSE = 0.832 log mol/L")
+exp.markdown("**Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):**")
+exp.markdown("* **Upgraded 10-Feature Random Forest:** R² = 0.862 | RMSE = 0.807 log mol/L")
+exp.markdown("* **Baseline 6-Feature Random Forest:** R² = 0.853 | RMSE = 0.832 log mol/L")
 exp.subheader("What Drives Water Solubility? (Feature Importance)")
 feature_names = ["MolWt", "LogP", "TPSA", "HDonors", "HAcceptors", "RotBonds", "AromaticRings", "HeavyAtoms", "FractionCSP3", "ValenceElectrons"]
 imp_df = pd.DataFrame({"Importance": model.feature_importances_}, index=feature_names).sort_values("Importance", ascending=False)
 exp.bar_chart(imp_df)
-exp.markdown("Known Exceptions & Applicability Domain:")
-exp.markdown("* Gases at Room Temperature (e.g., CO₂, NH₃, CH₄): Trained on condensed-phase (solid/liquid) organics, so aqueous solubility is overestimated for gas-phase molecules.")
-exp.markdown("* Ionic Salts & Metals (e.g., NaCl, CaCO₃): Designed for neutral covalent organic molecules; ionic lattice dissociation is not modeled.")
-exp.markdown("* Toxicity Screening: Combines live PubChem GHS hazard classifications with offline RDKit structural toxicophore filters (NIH & SMARTS pollutant rules).")
+exp.markdown("**Known Exceptions & Applicability Domain:**")
+exp.markdown("* **Gases at Room Temperature (e.g., CO₂, NH₃, CH₄):** Trained on condensed-phase (solid/liquid) organics, so aqueous solubility is overestimated for gas-phase molecules.")
+exp.markdown("* **Ionic Salts & Metals (e.g., NaCl, CaCO₃):** Designed for neutral covalent organic molecules; ionic lattice dissociation is not modeled.")
+exp.markdown("* **Toxicity Screening:** Combines live PubChem GHS hazard classifications with offline RDKit structural toxicophore filters (NIH & SMARTS pollutant rules).")
+
