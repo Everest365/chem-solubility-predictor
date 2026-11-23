@@ -274,47 +274,15 @@ with tab2:
       )
 
 st.divider()
-with st.expander("📊 Model Accuracy, Feature Importance & Known Exceptions"):
-st.markdown(
-"Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):"
-)
-st.markdown(
-"* Upgraded 10-Feature Random Forest: R² = 0.862 | RMSE = 0.807 log"
-" mol/L"
-)
-st.markdown(
-"* Baseline 6-Feature Random Forest: R² = 0.853 | RMSE = 0.832 log"
-" mol/L"
-)
-st.subheader("What Drives Water Solubility? (Feature Importance)")
-feature_names = [
-"MolWt",
-"LogP",
-"TPSA",
-"HDonors",
-"HAcceptors",
-"RotBonds",
-"AromaticRings",
-"HeavyAtoms",
-"FractionCSP3",
-"ValenceElectrons",
-]
-imp_df = pd.DataFrame(
-{"Importance": model.feature_importances_}, index=feature_names
-).sort_values("Importance", ascending=False)
-st.bar_chart(imp_df)
-st.markdown("Known Exceptions & Applicability Domain:")
-st.markdown(
-"* Gases at Room Temperature (e.g., CO₂, NH₃, CH₄): Trained on"
-" condensed-phase (solid/liquid) organics, so aqueous solubility is"
-" overestimated for gas-phase molecules."
-)
-st.markdown(
-"* Ionic Salts & Metals (e.g., NaCl, CaCO₃): Designed for neutral"
-" covalent organic molecules; ionic lattice dissociation is not modeled."
-)
-st.markdown(
-"* Toxicity Screening: Combines live PubChem GHS hazard"
-" classifications with offline RDKit structural toxicophore filters (NIH"
-" catalog)."
-)
+exp = st.expander("📊 Model Accuracy, Feature Importance & Known Exceptions")
+exp.markdown("Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):")
+exp.markdown("* Upgraded 10-Feature Random Forest: R² = 0.862 | RMSE = 0.807 log mol/L")
+exp.markdown("* Baseline 6-Feature Random Forest: R² = 0.853 | RMSE = 0.832 log mol/L")
+exp.subheader("What Drives Water Solubility? (Feature Importance)")
+feature_names = ["MolWt", "LogP", "TPSA", "HDonors", "HAcceptors", "RotBonds", "AromaticRings", "HeavyAtoms", "FractionCSP3", "ValenceElectrons"]
+imp_df = pd.DataFrame({"Importance": model.feature_importances_}, index=feature_names).sort_values("Importance", ascending=False)
+exp.bar_chart(imp_df)
+exp.markdown("Known Exceptions & Applicability Domain:")
+exp.markdown("* Gases at Room Temperature (e.g., CO₂, NH₃, CH₄): Trained on condensed-phase (solid/liquid) organics, so aqueous solubility is overestimated for gas-phase molecules.")
+exp.markdown("* Ionic Salts & Metals (e.g., NaCl, CaCO₃): Designed for neutral covalent organic molecules; ionic lattice dissociation is not modeled.")
+exp.markdown("* Toxicity Screening: Combines live PubChem GHS hazard classifications with offline RDKit structural toxicophore filters (NIH catalog).")
