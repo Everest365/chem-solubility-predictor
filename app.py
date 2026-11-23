@@ -270,43 +270,43 @@ with tab2:
         results = []
         for item in items:
             smi = name_to_smiles(item)
+            if smi:
+                m = Chem.MolFromSmiles(smi)
+                if m:
+                    f = pd.DataFrame([extract_upgraded_features(m)])
+                    p_logS = model.predict(f).item()
+                    lp = f["LogP"].item()
+                    mw = f["MolWt"].item()
+                    ar = f["AromaticRings"].item()
+                    mg_l = (10**p_logS) * mw * 1000
+                    t_status, t_details = check_toxicity(smi, m)
+                    risks = ", ".join(
+                        evaluate_risks(p_logS, lp, ar, t_status, t_details, m)
+                    )
+                    results.append(
+                        {
+                            "Chemical": item,
+                            "Molar Mass (g/mol)": round(mw, 2),
+                            "LogP": round(lp, 2),
+                            "Predicted logS (mol/L)": round(p_logS, 2),
+                            "Solubility (mg/L)": round(mg_l, 1),
+                            "Toxicity Status": t_status,
+                            "Hazard Details": t_details,
+                            "Environmental Fate": risks,
+                        }
+                    )
+        if results:
+            res_df = pd.DataFrame(results)
+            st.dataframe(res_df, use_container_width=True)
+            st.download_button(
+                "📥 Download Comparison Table (CSV)",
+                data=res_df.to_csv(index=False).encode("utf-8"),
+                file_name="aquifer_solubility_screening.csv",
+                mime="text/csv",
+            )
+        else:
+            st.error("No valid chemicals could be resolved. Check spelling and try again.")
 
-if smi:
-m = Chem.MolFromSmiles(smi)
-if m:
-f = pd.DataFrame([extract_upgraded_features(m)])
-p_logS = model.predict(f).item()
-lp = f["LogP"].item()
-mw = f["MolWt"].item()
-ar = f["AromaticRings"].item()
-mg_l = (10**p_logS) * mw * 1000
-t_status, t_details = check_toxicity(smi, m)
-risks = ", ".join(
-evaluate_risks(p_logS, lp, ar, t_status, t_details, m)
-)
-results.append(
-{
-"Chemical": item,
-"Molar Mass (g/mol)": round(mw, 2),
-"LogP": round(lp, 2),
-"Predicted logS (mol/L)": round(p_logS, 2),
-"Solubility (mg/L)": round(mg_l, 1),
-"Toxicity Status": t_status,
-"Hazard Details": t_details,
-"Environmental Fate": risks,
-}
-)
-if results:
-res_df = pd.DataFrame(results)
-st.dataframe(res_df, use_container_width=True)
-st.download_button(
-"📥 Download Comparison Table (CSV)",
-data=res_df.to_csv(index=False).encode("utf-8"),
-file_name="aquifer_solubility_screening.csv",
-mime="text/csv",
-)
-else:
-st.error("No valid chemicals could be resolved. Check spelling and try again.")
 st.divider()
 exp = st.expander("📊 Model Accuracy, Feature Importance & Known Exceptions")
 exp.markdown("Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):")
