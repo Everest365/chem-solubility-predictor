@@ -53,10 +53,11 @@ def check_toxicity(smiles, mol):
       cid_json = json.loads(res1.read().decode("utf-8"))
       cid = cid_json["IdentifierList"]["CID"].pop(0)
 
-    ghs_url = (
-        "https://nih.gov"
+       ghs_url = (
+        "https://pubchem" + ".ncbi.nlm.nih.gov/rest/pug_view/annotations/heading/JSON"
         f"?heading=GHS+Classification&cid={cid}"
     )
+
     req2 = urllib.request.Request(ghs_url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req2, timeout=6) as res2:
       raw_text = res2.read().decode("utf-8").lower()
@@ -71,11 +72,7 @@ def check_toxicity(smiles, mol):
   except Exception:
     pass
 
-  # 2. Offline RDKit Structural Toxicophore & Pollutant Class Alerts
-  params = FilterCatalog.FilterCatalogParams()
-  params.AddCatalog(FilterCatalog.FilterCatalogParams.FilterCatalogs.NIH)
-  if FilterCatalog.FilterCatalog(params).HasMatch(mol):
-    hazards.append("Reactive Toxicophore")
+ 
 
   smarts_alerts = {
       "Organochlorine / Chlorinated Aromatic": "[Cl]c",
