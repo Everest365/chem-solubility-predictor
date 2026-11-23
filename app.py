@@ -243,32 +243,34 @@ with tab1:
             else:
                 st.info(f"✅ **TOXICITY SCREEN ({tox_status}):** {tox_details}")
 
-            fate_flags = evaluate_risks(
-pred_logS, logP, arom_rings, tox_status, tox_details, mol
-)
-for flag in fate_flags:
-if "HIGH" in flag or "Persistent" in flag or "Bioaccumulation" in flag:
-st.error(f"🚨 {flag}")
-elif "LOW LEACHING" in flag or "Mobility" in flag:
-st.warning(f"💧 {flag}")
-else:
-st.success(f"🌿 {flag}")
+                       fate_flags = evaluate_risks(
+                pred_logS, logP, arom_rings, tox_status, tox_details, mol
+            )
+            for flag in fate_flags:
+                if "HIGH" in flag or "Persistent" in flag or "Bioaccumulation" in flag:
+                    st.error(f"🚨 **{flag}**")
+                elif "LOW LEACHING" in flag or "Mobility" in flag:
+                    st.warning(f"💧 **{flag}**")
+                else:
+                    st.success(f"🌿 **{flag}**")
+
 with tab2:
-st.write(
-"Compare multiple chemicals side-by-side and export results for lab or "
-"environmental analysis."
-)
-batch_input = st.text_area(
-"Enter chemical names or SMILES separated by commas or new lines:",
-value="Atrazine, Sucralose, Caffeine, PFOS, Benzene, Riboflavin, Paraquat, DDT",
-)
-if st.button("Run Batch Screening"):
-# Splits on newlines or commas followed by whitespace/letters (preserves names like 2,4-D or 1,4-Dioxane)
-raw_items = re.split(r"[\n;]+|,(?!\d)", batch_input)
-items = [item.strip() for item in raw_items if item.strip()]
-results = []
-for item in items:
-smi = name_to_smiles(item)
+    st.write(
+        "Compare multiple chemicals side-by-side and export results for lab or "
+        "environmental analysis."
+    )
+    batch_input = st.text_area(
+        "Enter chemical names or SMILES separated by commas or new lines:",
+        value="Atrazine, Sucralose, Caffeine, PFOS, Benzene, Riboflavin, Paraquat, DDT",
+    )
+    if st.button("Run Batch Screening"):
+        # Splits on newlines or commas followed by whitespace/letters (preserves names like 2,4-D or 1,4-Dioxane)
+        raw_items = re.split(r"[\n;]+|,(?!\d)", batch_input)
+        items = [item.strip() for item in raw_items if item.strip()]
+        results = []
+        for item in items:
+            smi = name_to_smiles(item)
+
 if smi:
 m = Chem.MolFromSmiles(smi)
 if m:
