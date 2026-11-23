@@ -42,54 +42,41 @@ def name_to_smiles(query):
 def check_toxicity(smiles, mol):
   hazards = []
 
-  # 1. Fast Lightweight PubChem GHS Lookup via CID
-  try:
-    post_data = urllib.parse.urlencode({"smiles": smiles}).encode("utf-8")
-    cid_url = "https://nih.gov"
-    req1 = urllib.request.Request(
-        cid_url, data=post_data, headers={"User-Agent": "Mozilla/5.0"}
-    )
-    with urllib.request.urlopen(req1, timeout=6) as res1:
-      cid_json = json.loads(res1.read().decode("utf-8"))
-      cid = cid_json["IdentifierList"]["CID"].pop(0)
+  # 1. General RDKit BRENK Toxicophore Filter (ignores harmless alkenes/fats)
+  params = FilterCatalog.FilterCatalogParams()
+  params.AddCatalog(FilterCatalog.FilterCatalogParams.FilterCatalogs.BRENK)
+  catalog = FilterCatalog.FilterCatalog(params)
+  for entry in catalog.GetMatches(mol):
+    desc = entry.GetDescription()
+    if desc not in ["isolated_alkene", "more_than_2_esters"]:
+      hazards.append(f"Toxicophore ({desc})")
 
-    ghs_url = (
-        "https://pubchem" + ".ncbi.nlm.nih.gov/rest/pug_view/annotations/heading/JSON"
-        f"?heading=GHS+Classification&cid={cid}"
-    )
+  # 2. General Physicochemical Ecotoxicity Rules (EPA / Pfizer 3/75 Rule)
+  logp = Descriptors.MolLogP(mol)
+  tpsa = Descriptors.TPSA(mol)
+  halogens = sum(
+      1 for atom in mol.GetAtoms() if atom.GetSymbol() in ["Cl", "Br", "I"]
+  )
 
-    req2 = urllib.request.Request(ghs_url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req2, timeout=6) as res2:
-      raw_text = res2.read().decode("utf-8").lower()
-      if any(k in raw_text for k in ["h300", "h301", "h302", "h310", "h311", "h330", "h331", "fatal", "toxic if swallowed", "acute toxicity"]):
-        hazards.append("Acute Toxicity")
-      if any(k in raw_text for k in ["h400", "h410", "h411", "h412", "aquatic life", "aquatic acute", "aquatic chronic"]):
-        hazards.append("Aquatic / Environmental Hazard")
-      if any(k in raw_text for k in ["h340", "h341", "h350", "h351", "h360", "h361", "cancer", "carcinogen", "mutagen"]):
-        hazards.append("Carcinogen / Mutagen Risk")
-      if any(k in raw_text for k in ["h370", "h371", "h372", "h373", "damage to organs"]):
-        hazards.append("Organ Toxicity")
-  except Exception:
-    pass
+  if logp > 3.0 and tpsa < 75.0:
+    hazards.append("Membrane-Permeable Bioactive Risk (LogP > 3 & TPSA < 75)")
+  if halogens >= 2:
+    hazards.append(f"Polyhalogenated Compound ({halogens} Cl/Br/I atoms)")
 
- 
-
-  smarts_alerts = {
-      "Organochlorine / Chlorinated Aromatic": "[Cl]c",
-      "Triazine Herbicide Core": "c1ncncn1",
-      "Organophosphate / Thiophosphate": "P(=O)(O)(O)",
-      "Nitroaromatic Compound": "[N+](=O)[O-]c",
-      "Polycyclic Aromatic Hydrocarbon": "c1ccc2ccccc2c1",
-  }
-  for label, patt in smarts_alerts.items():
+  # 3. General Organophosphate / Carbamate Pesticide Core Check
+  for label, patt in [
+      ("Organophosphate / Thiophosphate Ester", "P(=[O,S])(O)(O)O"),
+      ("Carbamate Ester Core", "NC(=O)O"),
+  ]:
     sub = Chem.MolFromSmarts(patt)
     if sub and mol.HasSubstructMatch(sub):
       hazards.append(label)
 
-  unique_hazards = list(dict.fromkeys(hazards))
+  unique_hazards = list(dict.fromkeys(hazards))[:3]
   if unique_hazards:
     return "High / Known Hazard", ", ".join(unique_hazards)
-  return "Low / No GHS Alerts", "No major toxicity flags found"
+  return "Low / Safe Organic Profile", "No major toxicophores or ecotoxicity alerts"
+
 
 
 def extract_upgraded_features(mol):
