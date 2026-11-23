@@ -42,24 +42,62 @@ def name_to_smiles(query):
 def check_toxicity(smiles, mol):
   hazards = []
   try:
-    encoded = urllib.parse.quote(smiles)
-    url = (
-        "https://nih.gov"
-        f"{encoded}/classification/JSON"
+    post_data = urllib.parse.urlencode({"smiles": smiles}).encode("utf-8")
+    cid_url = "https://nih.gov"
+    req1 = urllib.request.Request(
+        cid_url, data=post_data, headers={"User-Agent": "Mozilla/5.0"}
     )
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=6) as response:
-      raw_text = json.dumps(json.loads(response.read().decode("utf-8")))
-      if "Acute Toxicity" in raw_text or "Fatal" in raw_text:
-        hazards.append("Acute Toxicity")
-      if "Aquatic Acute" in raw_text or "Aquatic Chronic" in raw_text:
-        hazards.append("Aquatic / Environmental Hazard")
-      if (
-          "Carcinogenicity" in raw_text
-          or "Germ Cell Mutagenicity" in raw_text
+    with urllib.request.urlopen(req1, timeout=6) as res1:
+      cid_json = json.loads(res1.read().decode("utf-8"))
+      cid_list = cid_json["IdentifierList"]["CID"]
+      cid = cid_list.pop(0)
+
+    ghs_url = (
+        f"https://nih.gov{cid}"
+        "/JSON?heading=GHS+Classification"
+    )
+    req2 = urllib.request.Request(ghs_url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req2, timeout=6) as res2:
+      raw_text = res2.read().decode("utf-8")
+
+      if any(
+          code in raw_text
+          for code in [
+              "H300",
+              "H301",
+              "H302",
+              "H310",
+              "H311",
+              "H330",
+              "H331",
+              "Fatal",
+              "Toxic if swallowed",
+          ]
       ):
-        hazards.append("Carcinogen / Mutagen Risk")
-      if "Specific Target Organ Toxicity" in raw_text:
+        hazards.append("Acute Toxicity")
+      if any(
+          code in raw_text
+          for code in ["H400", "H410", "H411", "H412", "aquatic life"]
+      ):
+        hazards.append("Aquatic / Environmental Hazard")
+      if any(
+          code in raw_text
+          for code in [
+              "H340",
+              "H341",
+              "H350",
+              "H351",
+              "H360",
+              "H361",
+              "cancer",
+              "genetic defects",
+          ]
+      ):
+        hazards.append("Carcinogen / Mutagen / Reproductive Risk")
+      if any(
+          code in raw_text
+          for code in ["H370", "H371", "H372", "H373", "damage to organs"]
+      ):
         hazards.append("Organ Toxicity")
   except Exception:
     pass
@@ -257,42 +295,41 @@ with tab2:
     if results:
       res_df = pd.DataFrame(results)
       st.dataframe(res_df, use_container_width=True)
-      st.download_button(
-          "📥 Download Comparison Table (CSV)",
-          data=res_df.to_csv(index=False).encode("utf-8"),
-          file_name="aquifer_solubility_screening.csv",
-          mime="text/csv",
-      )
-    else:
-      st.error(
-          "No valid chemicals could be resolved. Check spelling and try again."
-      )
-
+st.download_button(
+"📥 Download Comparison Table (CSV)",
+data=res_df.to_csv(index=False).encode("utf-8"),
+file_name="aquifer_solubility_screening.csv",
+mime="text/csv",
+)
+else:
+st.error(
+"No valid chemicals could be resolved. Check spelling and try again."
+)
 st.divider()
 with st.expander("📊 Model Accuracy, Feature Importance & Known Exceptions"):
-  st.markdown(
-      "**Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):**"
-  )
-  st.markdown(
-      "* **Upgraded 10-Feature Random Forest:** R² = 0.862 | RMSE = 0.807 log"
-      " mol/L"
-  )
-  st.markdown(
-      "* **Baseline 6-Feature Random Forest:** R² = 0.853 | RMSE = 0.832 log"
-      " mol/L"
-  )
-  st.subheader("What Drives Water Solubility? (Feature Importance)")
-  feature_names = [
-      "MolWt",
-      "LogP",
-      "TPSA",
-      "HDonors",
-      "HAcceptors",
-      "RotBonds",
-      "AromaticRings",
-      "HeavyAtoms",
-      "FractionCSP3",
-      "ValenceElectrons",
+st.markdown(
+"Model Performance (Delaney ESOL Benchmark — 1,128 Compounds):"
+)
+st.markdown(
+"* Upgraded 10-Feature Random Forest: R² = 0.862 | RMSE = 0.807 log"
+" mol/L"
+)
+st.markdown(
+"* Baseline 6-Feature Random Forest: R² = 0.853 | RMSE = 0.832 log"
+" mol/L"
+)
+st.subheader("What Drives Water Solubility? (Feature Importance)")
+feature_names = [
+"MolWt",
+"LogP",
+"TPSA",
+"HDonors",
+"HAcceptors",
+"RotBonds",
+"AromaticRings",
+"HeavyAtoms",
+"FractionCSP3",
+"ValenceElectrons",
 ]
 imp_df = pd.DataFrame(
 {"Importance": model.feature_importances_}, index=feature_names
