@@ -53,7 +53,7 @@ def check_toxicity(smiles, mol):
       cid_json = json.loads(res1.read().decode("utf-8"))
       cid = cid_json["IdentifierList"]["CID"].pop(0)
 
-       ghs_url = (
+    ghs_url = (
         "https://pubchem" + ".ncbi.nlm.nih.gov/rest/pug_view/annotations/heading/JSON"
         f"?heading=GHS+Classification&cid={cid}"
     )
